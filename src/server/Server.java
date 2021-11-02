@@ -1,62 +1,98 @@
 package server;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Scanner;
+import java.util.ArrayList;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JTextField;
 
-public class Server {
+public class Server extends Thread{
 
-    public static void main(String[] args) {
-        final ServerSocket serverSocket;
-        final Socket clientSocket;
-        final BufferedReader in;
-        final PrintWriter out;
-        final Scanner sc = new Scanner(System.in);
+    private static ArrayList<BufferedWriter>clientes;
+    private static ServerSocket server;
+    private String nome;
+    private Socket con;
+    private InputStream in;
+    private InputStreamReader inr;
+    private BufferedReader bfr;
 
+    public Server(Socket con){
+        this.con = con;
         try {
-            serverSocket = new ServerSocket(5000);
-            clientSocket = serverSocket.accept();
-            out = new PrintWriter(clientSocket.getOutputStream());
-            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            Thread sender = new Thread(new Runnable() {
-                String msg;
-
-                @Override
-                public void run() {
-                    while (true) {
-                        msg = sc.nextLine();
-                        out.println(msg);
-                        out.flush();
-                    }
-                }
-            });
-            sender.start();
-            Thread receive = new Thread(new Runnable() {
-                String msg;
-
-                @Override
-                public void run() {
-                    try {
-                        msg = in.readLine();
-                        while (msg != null) {
-                            System.out.println("Client: " + msg);
-                            msg = in.readLine();
-                        }
-                        System.out.println("Client desconected");
-                        out.close();
-                        clientSocket.close();
-                        serverSocket.close();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-            receive.start();
+            in  = con.getInputStream();
+            inr = new InputStreamReader(in);
+            bfr = new BufferedReader(inr);
         } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void run(){
+
+        try{
+
+            String msg;
+            OutputStream ou =  this.con.getOutputStream();
+            Writer ouw = new OutputStreamWriter(ou);
+            BufferedWriter bfw = new BufferedWriter(ouw);
+            clientes.add(bfw);
+            nome = msg = bfr.readLine();
+
+            while(!"Sair".equalsIgnoreCase(msg) && msg != null)
+            {
+                msg = bfr.readLine();
+                sendToAll(bfw, msg);
+                System.out.println(msg);
+            }
+
+        }catch (Exception e) {
+            e.printStackTrace();
+
+        }
+    }
+
+    public void sendToAll(BufferedWriter bwSaida, String msg) throws  IOException
+    {
+        BufferedWriter bwS;
+
+        for(BufferedWriter bw : clientes){
+            bwS = (BufferedWriter)bw;
+            if(!(bwSaida == bwS)){
+                bw.write(nome + ": " + msg+"\r\n");
+                bw.flush();
+            }
+        }
+    }
+    public static void main(String []args) {
+
+        try{
+            JLabel lblMessage = new JLabel("Porta do Servidor:");
+            JTextField txtPorta = new JTextField("5000");
+            Object[] texts = {lblMessage, txtPorta };
+            JOptionPane.showMessageDialog(null, texts);
+            server = new ServerSocket(Integer.parseInt(txtPorta.getText()));
+            clientes = new ArrayList<BufferedWriter>();
+            JOptionPane.showMessageDialog(null,"Servidor ativo na porta: "+
+                    txtPorta.getText());
+
+            while(true){
+                System.out.println("Aguardando conexão...");
+                Socket con = server.accept();
+                System.out.println("Cliente conectado...");
+                Thread t = new Server(con);
+                t.start();
+            }
+
+        }catch (Exception e) {
             e.printStackTrace();
         }
     }
